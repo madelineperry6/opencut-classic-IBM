@@ -1,68 +1,149 @@
-import { describe, expect, test } from "bun:test";
-import type { OverlayTrack, SceneTracks, VideoTrack } from "@/timeline";
-import { resolveTrackPlacement } from "@/timeline/placement";
-import { mediaTime, ZERO_MEDIA_TIME } from "@/wasm";
+/**
+ * Bug #8 regression test — explicit strategy skips the overlap check on overlay tracks.
+ *
+ * The placement modules transitively import opencut-wasm (a WASM binary) via
+ * @/timeline/index.ts and @/wasm. We use Bun's mock.module() before any dynamic
+ * import so the mock is in place before the WASM module is evaluated.
+ *
+ * All imports of resolved modules are done with `await import(...)` AFTER the mock
+ * is registered, which is the correct pattern for Bun module mocking.
+ */
+import { mock, describe, expect, test } from "bun:test";
 
-// ── helpers (inline, self-contained) ────────────────────────────────────────
-
-function buildVideoElement(id: string, startTime: number, duration: number) {
+// Register the mock synchronously — this must happen before any `import` of
+// a module that touches opencut-wasm.
+mock.module("opencut-wasm", () => {
+	const TICKS = 90000;
 	return {
-		id,
-		type: "video" as const,
-		name: id,
-		startTime: mediaTime({ ticks: startTime }),
-		duration: mediaTime({ ticks: duration }),
-		trimStart: ZERO_MEDIA_TIME,
-		trimEnd: ZERO_MEDIA_TIME,
-		mediaId: `media-${id}`,
-		params: {
-			"transform.positionX": 0,
-			"transform.positionY": 0,
-			"transform.scaleX": 1,
-			"transform.scaleY": 1,
-			"transform.rotate": 0,
-			opacity: 1,
-		},
+		TICKS_PER_SECOND: () => TICKS,
+		mediaTimeFromSeconds: ({ seconds }: { seconds: number }) =>
+			Math.round(seconds * TICKS),
+		mediaTimeToSeconds: ({ time }: { time: number }) => time / TICKS,
+		roundToFrame: ({ time }: { time: number }) => time,
+		snappedSeekTime: ({ time }: { time: number }) => time,
+		lastFrameTime: ({ duration }: { duration: number }) => duration,
+		parseTimecode: () => null,
 	};
-}
+});
 
-function buildVideoTrack(id: string, elements: ReturnType<typeof buildVideoElement>[] = []): VideoTrack {
-	return { id, type: "video", name: id, elements, muted: false, hidden: false };
-}
+// Helper: cast a plain number as MediaTime (branded number — safe at runtime).
+const t = (n: number) => n as number & { readonly __mediaTime: unique symbol };
 
-function buildSceneTracks(overlay: OverlayTrack[] = [], mainElements: ReturnType<typeof buildVideoElement>[] = []): SceneTracks {
-	return {
-		overlay,
-		main: buildVideoTrack("main", mainElements),
-		audio: [],
-	};
-}
+describe("resolveTrackPlacement — explicit strategy, bug #8", () => {
+	test("rejects placement on an overlay track that already has an element at the same time", async () => {
+		// Dynamic import AFTER mock is registered.
+		const { resolveTrackPlacement } = await import("../resolve");
 
-// ── bug #8: explicit strategy skips overlap check on overlay tracks ───────
+		// Overlay track with an element at ticks 0–100.
+		const tracks = {
+			overlay: [
+				{
+					id: "overlay-1",
+					type: "video" as const,
+					name: "overlay-1",
+					muted: false,
+					hidden: false,
+					elements: [
+						{
+							id: "existing",
+							type: "video" as const,
+							name: "existing",
+							startTime: t(0),
+							duration: t(100),
+							trimStart: t(0),
+							trimEnd: t(0),
+							mediaId: "media-existing",
+							params: {
+								"transform.positionX": 0,
+								"transform.positionY": 0,
+								"transform.scaleX": 1,
+								"transform.scaleY": 1,
+								"transform.rotate": 0,
+								opacity: 1,
+							},
+						},
+					],
+				},
+			],
+			main: {
+				id: "main",
+				type: "video" as const,
+				name: "main",
+				muted: false,
+				hidden: false,
+				elements: [],
+			},
+			audio: [],
+		};
 
-describe("resolveTrackPlacement — explicit strategy", () => {
-	test("returns null when the target overlay track already has an element at the same time", () => {
-		// Existing element occupies ticks 0–100 on the overlay track.
-		const existingElement = buildVideoElement("existing", 0, 100);
-		const overlayTrack = buildVideoTrack("overlay-1", [existingElement]);
-		const tracks = buildSceneTracks([overlayTrack as OverlayTrack]);
-
-		// New element also wants ticks 0–100 on the same track — a direct overlap.
+		// Request explicit placement of a new element that overlaps ticks 0–100.
 		const result = resolveTrackPlacement({
 			tracks,
 			elementType: "video",
-			timeSpans: [
-				{
-					startTime: mediaTime({ ticks: 0 }),
-					duration: mediaTime({ ticks: 100 }),
-				},
-			],
+			timeSpans: [{ startTime: t(0), duration: t(100) }],
 			strategy: { type: "explicit", trackId: "overlay-1" },
 		});
 
-		// Expected: placement should be rejected (null) because the slot is occupied.
-		// Bug #8: the explicit strategy currently skips canPlaceTimeSpansOnTrack,
-		// so it returns a non-null result instead of null, allowing silent overlap.
+		// BUG #8: the explicit branch does NOT call canPlaceTimeSpansOnTrack,
+		// so it currently returns a non-null result and silently allows the overlap.
+		// When the bug is fixed, this assertion will pass.
 		expect(result).toBeNull();
+	});
+
+	test("accepts placement on an overlay track when the time slot is free", async () => {
+		const { resolveTrackPlacement } = await import("../resolve");
+
+		// Same overlay track, but new element starts at tick 100 (no overlap).
+		const tracks = {
+			overlay: [
+				{
+					id: "overlay-1",
+					type: "video" as const,
+					name: "overlay-1",
+					muted: false,
+					hidden: false,
+					elements: [
+						{
+							id: "existing",
+							type: "video" as const,
+							name: "existing",
+							startTime: t(0),
+							duration: t(100),
+							trimStart: t(0),
+							trimEnd: t(0),
+							mediaId: "media-existing",
+							params: {
+								"transform.positionX": 0,
+								"transform.positionY": 0,
+								"transform.scaleX": 1,
+								"transform.scaleY": 1,
+								"transform.rotate": 0,
+								opacity: 1,
+							},
+						},
+					],
+				},
+			],
+			main: {
+				id: "main",
+				type: "video" as const,
+				name: "main",
+				muted: false,
+				hidden: false,
+				elements: [],
+			},
+			audio: [],
+		};
+
+		const result = resolveTrackPlacement({
+			tracks,
+			elementType: "video",
+			timeSpans: [{ startTime: t(100), duration: t(50) }],
+			strategy: { type: "explicit", trackId: "overlay-1" },
+		});
+
+		// Non-overlapping placement: should be accepted.
+		expect(result).not.toBeNull();
+		expect(result?.kind).toBe("existingTrack");
 	});
 });
