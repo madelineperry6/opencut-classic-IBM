@@ -270,12 +270,16 @@ export class VideoCache {
 		try {
 			const videoTrack = await input.getPrimaryVideoTrack();
 			if (!videoTrack) {
-				throw new Error("No video track found");
+				input.dispose();
+				console.warn(`No video track found for ${mediaId}`);
+				return;
 			}
 
 			const canDecode = await videoTrack.canDecode();
 			if (!canDecode) {
-				throw new Error("Video codec not supported for decoding");
+				input.dispose();
+				console.warn(`Video codec not supported for decoding: ${mediaId}`);
+				return;
 			}
 
 			const sink = new CanvasSink(videoTrack, {
@@ -296,7 +300,6 @@ export class VideoCache {
 		} catch (error) {
 			input.dispose();
 			console.error(`Failed to initialize video sink for ${mediaId}:`, error);
-			throw error;
 		}
 	}
 
