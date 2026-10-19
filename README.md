@@ -16,6 +16,14 @@ Youtube link : https://youtu.be/ca-CU8MOueo
 
 **Tech stack:** IBM Bob IDE (Ask, Plan, Agent modes, `/init`) · Next.js · React · TypeScript · Rust/WASM · Bun test runner · ESLint · Turborepo · Docker Compose · GitHub
 
+## Try it live in the cloud
+1. Open: https://codespaces.new/Kornelkaaaa/opencut-classic-IBM
+2. In the terminal, run:
+   curl -fsSL https://bun.sh/install | bash && source ~/.bashrc
+   cd apps/web && cp .env.example .env.local && bun install && bun dev
+3. Open the forwarded port 3000.
+Run our test: bun test src/timeline/placement/__tests__/explicit-overlap.test.ts
+
 ### Improvements made
 
 - **Fixed bug #8** — explicit timeline placement now rejects overlapping clips ([`resolve.ts`](apps/web/src/timeline/placement/resolve.ts))
