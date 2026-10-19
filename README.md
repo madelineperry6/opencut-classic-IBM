@@ -12,6 +12,8 @@ The rewrite is happening at [opencut-app/opencut](https://github.com/opencut-app
 
 > We used IBM Bob to take on OpenCut, an open-source browser video editor none of us had seen before. Bob's `/init` and Ask mode mapped the codebase, producing project rules, a traced media-to-timeline flow, and a Mermaid architecture diagram. Bob then audited the timeline and ranked eight potential bugs. Instead of trusting the list, we had Bob write a Bun test reproducing bug #8: clips dropped onto an overlay track could silently overlap. The test failed, proving the bug. Using Plan and Agent modes, we applied a four-line fix mirroring existing placement strategies, and the test now passes.
 
+Youtube link : https://youtu.be/ca-CU8MOueo
+
 **Tech stack:** IBM Bob IDE (Ask, Plan, Agent modes, `/init`) · Next.js · React · TypeScript · Rust/WASM · Bun test runner · ESLint · Turborepo · Docker Compose · GitHub
 
 ### Improvements made
