@@ -8,9 +8,20 @@ The rewrite is happening at [opencut-app/opencut](https://github.com/opencut-app
 
 ## IBM Bob Hackathon 2026: What We Built
 
-**Theme 1 — Explore, Fix, and Build** · Full session log: [BOB_LOG.md](BOB_LOG.md)
+**Theme 1 — Students / Early Career: Explore, Fix, and Build** · Full session log: [BOB_LOG.md](BOB_LOG.md)
 
-We used [IBM Bob](https://www.ibm.com/products/bob) as an AI pair-programmer to explore this codebase, audit it for bugs, fix one, and write a regression test — all from scratch, with no prior familiarity with the project.
+> We used IBM Bob to take on OpenCut, an open-source browser video editor none of us had seen before. Bob's `/init` and Ask mode mapped the codebase, producing project rules, a traced media-to-timeline flow, and a Mermaid architecture diagram. Bob then audited the timeline and ranked eight potential bugs. Instead of trusting the list, we had Bob write a Bun test reproducing bug #8: clips dropped onto an overlay track could silently overlap. The test failed, proving the bug. Using Plan and Agent modes, we applied a four-line fix mirroring existing placement strategies, and the test now passes.
+
+**Tech stack:** IBM Bob IDE (Ask, Plan, Agent modes, `/init`) · Next.js · React · TypeScript · Rust/WASM · Bun test runner · ESLint · Turborepo · Docker Compose · GitHub
+
+### Improvements made
+
+- **Fixed bug #8** — explicit timeline placement now rejects overlapping clips ([`resolve.ts`](apps/web/src/timeline/placement/resolve.ts))
+- **Added regression test** — [`explicit-overlap.test.ts`](apps/web/src/timeline/placement/__tests__/explicit-overlap.test.ts) (2 pass, 0 fail)
+- **Audited the timeline** — documented 8 ranked issues (see bug table below)
+- **Added [`docs/architecture.md`](docs/architecture.md)** — Mermaid diagram of all 7 layers and 5 data flows
+- **Expanded [`AGENTS.md`](AGENTS.md)** and Bob mode rules in [`.bob/`](.bob/)
+- **Added [`BOB_LOG.md`](BOB_LOG.md)** — step-by-step session log
 
 ### How Bob helped us understand the codebase
 
