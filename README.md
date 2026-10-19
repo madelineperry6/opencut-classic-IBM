@@ -4,6 +4,67 @@ This is the original OpenCut codebase. It's archived and no longer maintained.
 
 The rewrite is happening at [opencut-app/opencut](https://github.com/opencut-app/opencut).
 
+---
+
+## IBM Bob Hackathon 2026: What We Built
+
+**Theme 1 — Explore, Fix, and Build** · Full session log: [BOB_LOG.md](BOB_LOG.md)
+
+We used [IBM Bob](https://www.ibm.com/products/bob) as an AI pair-programmer to explore this codebase, audit it for bugs, fix one, and write a regression test — all from scratch, with no prior familiarity with the project.
+
+### How Bob helped us understand the codebase
+
+- **`/init` (AGENTS.md generation)** — Bob read `package.json`, `biome.json`, `eslint.config.mjs`, and every key source file to produce [`AGENTS.md`](AGENTS.md) and three mode-specific rule files (`.bob/rules-*/AGENTS.md`) documenting build commands, the custom `prefer-object-params` ESLint rule, the `MediaTime` branded-integer invariant, the Command pattern, and the full 7-step media → timeline flow.
+- **Ask mode** — Used to answer questions about project structure, verify which commands actually start the app (confirming `bun dev:web`, not the non-existent `moon run web:dev` claimed in an earlier draft), and explain how each folder relates to the others.
+- **`docs/architecture.md`** — Bob generated a full [Mermaid architecture diagram](docs/architecture.md) mapping all 7 layers of the web editor (UI, EditorCore singleton, Commands, Media pipeline, Renderer, Storage, WASM bridge) and the 5 major data flows through the system.
+
+### The 8-bug audit
+
+Bob read the entire timeline subsystem — placement, commands, update pipeline, drag-drop controller, scene manager — and surfaced 8 real bugs ranked by fix difficulty:
+
+| # | Severity | Location | Description |
+|---|---|---|---|
+| 1 | Easy | `move-elements.ts` | `execute()` throws instead of returning `undefined`, skipping the undo stack |
+| 2 | Easy | `scenes-manager.ts` | `getActiveScene()` throws; hooks call it without null guards |
+| 3 | Easy | `timeline-manager.ts` | `pushHistory: false` bypasses `CommandManager`, silently drops selection updates |
+| 4 | Medium | `move-elements.ts` | `MoveElementCommand` doesn't validate overlap before committing |
+| 5 | Medium | `apply.ts` | Audio track insert-index formula wrong when there are no overlay tracks |
+| 6 | Medium | `main-track.ts` | Main-track gap after deletion — only earliest element is re-anchored |
+| 7 | Hard | `split-elements.ts` | Zero-duration half produced when a retimed clip is split near its end |
+| **8** | **Hard** | **`resolve.ts`** | **Explicit placement strategy skips overlap check → silent clip overlap on overlay tracks** |
+
+### Verifying bug #8 with a failing test
+
+We wrote [`apps/web/src/timeline/placement/__tests__/explicit-overlap.test.ts`](apps/web/src/timeline/placement/__tests__/explicit-overlap.test.ts) — a `bun:test` regression test that calls `resolveTrackPlacement` with `strategy: { type: "explicit" }` targeting an overlay track that already has a clip in the same time slot, and asserts the result is `null` (rejected). Before the fix, the test fails because the explicit branch returns a non-null result and silently allows the overlap.
+
+### The fix
+
+**4 lines in [`apps/web/src/timeline/placement/resolve.ts`](apps/web/src/timeline/placement/resolve.ts)** — add the same `canPlaceTimeSpansOnTrack` guard that the `firstAvailable`, `preferIndex`, and `aboveSource` strategies already use:
+
+```ts
+if (!canPlaceTimeSpansOnTrack({ track, timeSpans })) {
+    return null;
+}
+```
+
+`canPlaceTimeSpansOnTrack` was already imported; no new dependencies were added.
+
+### Running the app and the test
+
+```bash
+# Start the web app (from repo root)
+bun install
+bun dev:web
+# → http://localhost:3000
+
+# Run just the regression test (requires WASM to be built first)
+bun run build:wasm
+cd apps/web
+bun test src/timeline/placement/__tests__/explicit-overlap.test.ts
+```
+
+---
+
 ## Sponsors
 
 Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss) and [fal.ai](https://fal.ai?utm_source=github-opencut&utm_campaign=oss) for their support of open-source software.

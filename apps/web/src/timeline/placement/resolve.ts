@@ -157,6 +157,10 @@ export function resolveTrackPlacement({
 			return null;
 		}
 
+		if (!canPlaceTimeSpansOnTrack({ track, timeSpans })) {
+			return null;
+		}
+
 		return buildExistingTrackResult({
 			track,
 			trackIndex,
